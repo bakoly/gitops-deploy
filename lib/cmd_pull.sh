@@ -2,7 +2,13 @@
 # bagitops pull
 
 cmd_pull() {
-  [[ $# -eq 0 ]] || die "'bagitops pull' takes no arguments — set the repo URL with 'bagitops init'"
+  local force=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force) force=1; shift ;;
+      *) die "unknown option: $1 — usage: bagitops pull [--force]" ;;
+    esac
+  done
 
   require_cmd git
 
@@ -26,21 +32,25 @@ cmd_pull() {
 
   # --- Check remote HEAD against cached commit (skip pull if unchanged) ---
   local remote_sha cached_sha=""
-  printf "  ${DIM}[1/5] checking remote HEAD...${RESET}\n" >&2
-  remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
-  [[ -f "$last_commit_file" ]] && cached_sha="$(cat "$last_commit_file")"
-
-  if [[ -n "$remote_sha" ]]; then
-    printf "  ${DIM}      remote: %.12s${RESET}\n" "$remote_sha" >&2
-    printf "  ${DIM}      cached: %s${RESET}\n" "${cached_sha:+"$(printf '%.12s' "$cached_sha")"}" >&2
+  if [[ $force -eq 1 ]]; then
+    printf "  ${DIM}[1/5] skipping HEAD check (--force)${RESET}\n" >&2
   else
-    printf "  ${DIM}      could not reach remote — proceeding with sync${RESET}\n" >&2
-  fi
+    printf "  ${DIM}[1/5] checking remote HEAD...${RESET}\n" >&2
+    remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
+    [[ -f "$last_commit_file" ]] && cached_sha="$(cat "$last_commit_file")"
 
-  if [[ -n "$remote_sha" && "$remote_sha" == "$cached_sha" ]]; then
-    printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
-    printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
-    return 0
+    if [[ -n "$remote_sha" ]]; then
+      printf "  ${DIM}      remote: %.12s${RESET}\n" "$remote_sha" >&2
+      printf "  ${DIM}      cached: %s${RESET}\n" "${cached_sha:+"$(printf '%.12s' "$cached_sha")"}" >&2
+    else
+      printf "  ${DIM}      could not reach remote — proceeding with sync${RESET}\n" >&2
+    fi
+
+    if [[ -n "$remote_sha" && "$remote_sha" == "$cached_sha" ]]; then
+      printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
+      printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
+      return 0
+    fi
   fi
 
   mkdir -p "$parts_dir"
