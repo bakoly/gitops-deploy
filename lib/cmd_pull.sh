@@ -22,6 +22,18 @@ cmd_pull() {
 
   local repo_dir="$BAGITOPS_REPO_DIR"
   local parts_dir="$repo_dir/imageparts"   # git clone lives here
+  local last_commit_file="$repo_dir/last-commit"
+
+  # --- Check remote HEAD against cached commit (skip pull if unchanged) ---
+  local remote_sha cached_sha=""
+  remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
+  [[ -f "$last_commit_file" ]] && cached_sha="$(cat "$last_commit_file")"
+
+  if [[ -n "$remote_sha" && "$remote_sha" == "$cached_sha" ]]; then
+    printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
+    printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
+    return 0
+  fi
 
   mkdir -p "$parts_dir"
 
@@ -45,6 +57,11 @@ cmd_pull() {
     fi
   fi
   spinner_stop "Repo synced"
+
+  # Save the commit SHA now, before imageparts/ is wiped
+  local head_sha
+  head_sha="$(git -C "$parts_dir" rev-parse HEAD 2>/dev/null)"
+  [[ -n "$head_sha" ]] && printf '%s\n' "$head_sha" > "$last_commit_file"
 
   # --- Discover image sets ---
   # Group chunk files by archive name (strip trailing .NNN numeric suffix).
