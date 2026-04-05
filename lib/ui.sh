@@ -46,7 +46,7 @@ spinner_start() {
 spinner_stop() {
   local msg="$1"
   if [[ -n "$_SPINNER_PID" ]]; then
-    kill "$_SPINNER_PID" 2>/dev/null
+    kill -KILL "$_SPINNER_PID" 2>/dev/null
     wait "$_SPINNER_PID" 2>/dev/null || true
     _SPINNER_PID=""
   fi
@@ -56,7 +56,7 @@ spinner_stop() {
 spinner_fail() {
   local msg="$1"
   if [[ -n "$_SPINNER_PID" ]]; then
-    kill "$_SPINNER_PID" 2>/dev/null
+    kill -KILL "$_SPINNER_PID" 2>/dev/null
     wait "$_SPINNER_PID" 2>/dev/null || true
     _SPINNER_PID=""
   fi
