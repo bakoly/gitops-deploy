@@ -47,9 +47,15 @@ cmd_pull() {
     fi
 
     if [[ -n "$remote_sha" && "$remote_sha" == "$cached_sha" ]]; then
-      printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
-      printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
-      return 0
+      # Only skip if assembled tars are still present (not yet consumed by run)
+      local _existing_tars=()
+      mapfile -t _existing_tars < <(find "$repo_dir" -maxdepth 1 -type f -name "*.tar" 2>/dev/null)
+      if [[ ${#_existing_tars[@]} -gt 0 ]]; then
+        printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
+        printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
+        return 0
+      fi
+      printf "  ${DIM}      up to date but images missing — re-assembling${RESET}\n" >&2
     fi
   fi
 
@@ -120,9 +126,9 @@ cmd_pull() {
   cp "$compose_src" "$repo_dir/docker-compose.yml"
   check_bind_mount_paths "$repo_dir/docker-compose.yml"
 
-  spinner_start "Clearing imageparts/..."
-  find "$parts_dir" -mindepth 1 -delete
-  spinner_stop "imageparts/ cleared"
+  spinner_start "Removing imageparts/..."
+  rm -rf "$parts_dir"
+  spinner_stop "imageparts/ removed"
 
   printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
 }
