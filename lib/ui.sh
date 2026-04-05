@@ -64,7 +64,7 @@ spinner_fail() {
 }
 
 # Ensure spinner is killed if the script exits unexpectedly
-trap 'spinner_fail "aborted"' INT TERM
+trap 'spinner_fail "aborted"; exit 130' INT TERM
 
 # ---------------------------------------------------------------------------
 # Progress bar

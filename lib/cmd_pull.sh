@@ -14,10 +14,11 @@ cmd_pull() {
 
   [[ -n "$repo_url" ]] || die "no repo URL in config — re-run 'bagitops init <name> <url>'"
 
+  # ConnectTimeout only limits SSH handshake, not ongoing data transfers
   local git_ssh_cmd=""
   if [[ -n "$ssh_key" ]]; then
     [[ -f "$ssh_key" ]] || die "ssh key not found: $ssh_key"
-    git_ssh_cmd="ssh -i $ssh_key -o StrictHostKeyChecking=no -o BatchMode=yes"
+    git_ssh_cmd="ssh -i $ssh_key -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=15"
   fi
 
   local repo_dir="$BAGITOPS_REPO_DIR"
@@ -26,8 +27,16 @@ cmd_pull() {
 
   # --- Check remote HEAD against cached commit (skip pull if unchanged) ---
   local remote_sha cached_sha=""
-  remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
+  printf "  ${DIM}[1/5] checking remote HEAD...${RESET}\n" >&2
+  remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
   [[ -f "$last_commit_file" ]] && cached_sha="$(cat "$last_commit_file")"
+
+  if [[ -n "$remote_sha" ]]; then
+    printf "  ${DIM}      remote: %.12s${RESET}\n" "$remote_sha" >&2
+    printf "  ${DIM}      cached: %s${RESET}\n" "${cached_sha:+"$(printf '%.12s' "$cached_sha")"}" >&2
+  else
+    printf "  ${DIM}      could not reach remote — proceeding with sync${RESET}\n" >&2
+  fi
 
   if [[ -n "$remote_sha" && "$remote_sha" == "$cached_sha" ]]; then
     printf "  ${GREEN}✓${RESET}  Already up to date ${DIM}(%.12s)${RESET}\n" "$remote_sha" >&2
@@ -38,34 +47,35 @@ cmd_pull() {
   mkdir -p "$parts_dir"
 
   # --- Sync repo into imageparts/ ---
+  printf "  ${DIM}[2/5] syncing repo...${RESET}\n" >&2
   spinner_start "Syncing repo..."
   if [[ -d "$parts_dir/.git" ]]; then
-    if [[ -n "$git_ssh_cmd" ]]; then
-      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
-      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$parts_dir" fetch --depth 1 origin &>/dev/null
-    else
+    printf "  ${DIM}      updating existing clone${RESET}\n" >&2
+    GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
+    GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git -C "$parts_dir" fetch --depth 1 origin &>/dev/null
-    fi
     git -C "$parts_dir" reset --hard FETCH_HEAD &>/dev/null
   else
+    printf "  ${DIM}      fresh clone${RESET}\n" >&2
     rm -rf "$parts_dir"
-    if [[ -n "$git_ssh_cmd" ]]; then
-      GIT_SSH_COMMAND="$git_ssh_cmd" git clone --depth 1 "$repo_url" "$parts_dir" &>/dev/null
-    else
+    GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git clone --depth 1 "$repo_url" "$parts_dir" &>/dev/null
-    fi
   fi
   spinner_stop "Repo synced"
 
   # Save the commit SHA now, before imageparts/ is wiped
   local head_sha
   head_sha="$(git -C "$parts_dir" rev-parse HEAD 2>/dev/null)"
-  [[ -n "$head_sha" ]] && printf '%s\n' "$head_sha" > "$last_commit_file"
+  if [[ -n "$head_sha" ]]; then
+    printf '%s\n' "$head_sha" > "$last_commit_file"
+    printf "  ${DIM}      commit: %.12s${RESET}\n" "$head_sha" >&2
+  fi
 
   # --- Discover image sets ---
   # Group chunk files by archive name (strip trailing .NNN numeric suffix).
   # e.g. imageparts/cc-org-api.tar.000 → cc-org-api.tar
+  printf "  ${DIM}[3/5] discovering image chunks...${RESET}\n" >&2
   local archives=()
   mapfile -t archives < <(
     find "$parts_dir" -maxdepth 1 -type f -name "*.tar.*" \
@@ -74,13 +84,16 @@ cmd_pull() {
       | xargs -I{} basename {}
   )
   [[ ${#archives[@]} -gt 0 ]] || die "no image chunks found in imageparts/"
+  printf "  ${DIM}      found %d archive(s): %s${RESET}\n" "${#archives[@]}" "${archives[*]}" >&2
 
   # --- For each archive: assemble (to repo_dir root) → load → remove ---
+  printf "  ${DIM}[4/5] assembling and loading images...${RESET}\n" >&2
   for archive in "${archives[@]}"; do
     local image_tar="$repo_dir/$archive"   # direct child of .bagitops-repo/
 
     local chunks=()
     mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)
+    printf "  ${DIM}      %s: %d chunk(s)${RESET}\n" "$archive" "${#chunks[@]}" >&2
 
     rm -f "$image_tar"
     local i=0
@@ -90,7 +103,7 @@ cmd_pull() {
       progress_bar "$i" "${#chunks[@]}" "assembling $archive"
     done
 
-    spinner_start "Loading $archive..."
+    spinner_start "Loading $archive into Docker..."
     local load_out
     load_out="$(docker load -i "$image_tar" 2>&1)"
     spinner_stop "$archive loaded"
@@ -100,6 +113,7 @@ cmd_pull() {
   done
 
   # --- Promote docker-compose.yml before wiping imageparts/ ---
+  printf "  ${DIM}[5/5] finalising...${RESET}\n" >&2
   local compose_src="$parts_dir/docker-compose.yml"
   [[ -f "$compose_src" ]] || die "docker-compose.yml not found in imageparts/ — incomplete repo?"
   cp "$compose_src" "$repo_dir/docker-compose.yml"

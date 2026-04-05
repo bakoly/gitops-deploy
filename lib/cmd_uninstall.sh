@@ -7,14 +7,16 @@ cmd_uninstall() {
   printf "\n  ${BOLD}Uninstalling bagitops...${RESET}\n\n" >&2
 
   if [[ -f "$LAUNCHER" ]]; then
-    spinner_start "Removing launcher..."
     if [[ -w "$LAUNCHER" ]]; then
+      spinner_start "Removing launcher..."
       rm -f "$LAUNCHER"
+      spinner_stop "Removed $LAUNCHER"
     else
-      command -v sudo &>/dev/null || { spinner_fail "cannot remove $LAUNCHER"; die "'sudo' is not available"; }
+      command -v sudo &>/dev/null || die "'sudo' is not available — cannot remove $LAUNCHER"
+      printf "  ${DIM}  sudo required to remove %s${RESET}\n" "$LAUNCHER" >&2
       sudo rm -f "$LAUNCHER"
+      printf "  ${GREEN}✓${RESET}  Removed %s\n" "$LAUNCHER" >&2
     fi
-    spinner_stop "Removed $LAUNCHER"
   fi
 
   if [[ -d "$BAGITOPS_CLI_DIR" ]]; then
