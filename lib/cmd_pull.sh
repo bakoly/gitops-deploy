@@ -113,7 +113,7 @@ cmd_pull() {
     rm -f "$image_tar"
     local i=0
     for chunk in "${chunks[@]}"; do
-      (( i++ ))
+      i=$(( i + 1 ))
       cat "$chunk" >> "$image_tar"
       progress_bar "$i" "${#chunks[@]}" "assembling $archive"
     done
