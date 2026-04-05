@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve the lib/ directory relative to this script, even through symlinks
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+LIB_DIR="$SCRIPT_DIR/lib"
+
+source "$LIB_DIR/utils.sh"
+source "$LIB_DIR/ui.sh"
+source "$LIB_DIR/cmd_pull.sh"
+source "$LIB_DIR/cmd_run.sh"
+source "$LIB_DIR/cmd_update.sh"
+source "$LIB_DIR/cmd_uninstall.sh"
+
+bagitops_usage() {
+  cat <<EOF
+bagitops — GitOps deployment utility
+
+Usage:
+  bagitops pull <git-repo-url> [--ssh-key <path>]
+  bagitops run
+  bagitops update
+  bagitops uninstall
+
+Commands:
+  pull       Clone/update remote app repo, assemble image chunks, load into Docker
+  run        Start containers via docker-compose.yml in the pulled repo
+  update     Pull latest bagitops from the CLI repo
+  uninstall  Remove bagitops and all its data
+EOF
+}
+
+print_banner
+
+[[ $# -ge 1 ]] || { bagitops_usage; exit 0; }
+
+cmd="$1"; shift
+case "$cmd" in
+  pull)          cmd_pull "$@" ;;
+  run)           cmd_run ;;
+  update)        cmd_update ;;
+  uninstall)     cmd_uninstall ;;
+  help|--help|-h) bagitops_usage ;;
+  *) die "unknown command: $cmd (try 'bagitops help')" ;;
+esac
