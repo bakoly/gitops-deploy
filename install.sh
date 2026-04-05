@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CLI_REPO="https://github.com/bakoly/gitops-deploy.git"
-CLI_DIR="$HOME/.bagitops/cli"
+CLI_DIR="$HOME/bagitops/cli"
 INSTALL_DIR="/usr/local/bin"
 SCRIPT_NAME="bagitops"
 
@@ -19,7 +19,7 @@ require_cmd git
 require_cmd docker
 
 # Clone or update the CLI repo
-mkdir -p "$HOME/.bagitops"
+mkdir -p "$HOME/bagitops"
 if [[ -d "$CLI_DIR/.git" ]]; then
   echo "==> Updating existing CLI repo..."
   git -C "$CLI_DIR" pull --ff-only

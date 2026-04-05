@@ -89,7 +89,7 @@ cmd_pull() {
   # --- For each archive: assemble (to repo_dir root) → load → remove ---
   printf "  ${DIM}[4/5] assembling and loading images...${RESET}\n" >&2
   for archive in "${archives[@]}"; do
-    local image_tar="$repo_dir/$archive"   # direct child of .bagitops-repo/
+    local image_tar="$repo_dir/$archive"   # direct child of bagitops-repo/
 
     local chunks=()
     mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)

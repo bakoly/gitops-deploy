@@ -2,7 +2,7 @@
 # Shared helpers
 
 # CLI installation directory (used by update/uninstall only)
-BAGITOPS_CLI_DIR="$HOME/.bagitops"
+BAGITOPS_CLI_DIR="$HOME/bagitops"
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -62,7 +62,7 @@ compose_bind_mounts() {
 #
 # Enforces the convention that all bind-mount host paths must be relative
 # (start with ./). Absolute paths (/something) are not allowed — data must
-# live inside the project tree under .bagitops-repo/.
+# live inside the project tree under bagitops-repo/.
 # Dies if any violation is found, listing each offending service + path.
 # Named volumes (no leading / or ./) are silently ignored.
 # ---------------------------------------------------------------------------
@@ -118,12 +118,12 @@ check_bind_mount_paths() {
 
 require_cmd() { command -v "$1" &>/dev/null || die "'$1' is required but not found"; }
 
-# Walk up from the given directory looking for a .bagitops anchor file.
+# Walk up from the given directory looking for a bagitops anchor file.
 # Prints the project root and returns 0 on success, returns 1 if not found.
 _find_project_root() {
   local dir="${1:-$PWD}"
   while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/.bagitops" ]]; then
+    if [[ -f "$dir/bagitops" ]]; then
       echo "$dir"
       return 0
     fi
@@ -138,8 +138,8 @@ load_config() {
     || die "not inside a bagitops project — run 'bagitops init <name> <url>' first"
 
   # shellcheck source=/dev/null
-  source "$root/.bagitops"
+  source "$root/bagitops"
 
   BAGITOPS_PROJECT_ROOT="$root"
-  BAGITOPS_REPO_DIR="$root/.bagitops-repo"
+  BAGITOPS_REPO_DIR="$root/bagitops-repo"
 }
