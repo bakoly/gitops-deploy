@@ -17,10 +17,10 @@ cmd_uninstall() {
     spinner_stop "Removed $LAUNCHER"
   fi
 
-  if [[ -d "$HOME/.bagitops" ]]; then
-    spinner_start "Removing data directory..."
-    rm -rf "$HOME/.bagitops"
-    spinner_stop "Removed $HOME/.bagitops"
+  if [[ -d "$BAGITOPS_CLI_DIR" ]]; then
+    spinner_start "Removing CLI directory..."
+    rm -rf "$BAGITOPS_CLI_DIR"
+    spinner_stop "Removed $BAGITOPS_CLI_DIR"
   fi
 
   printf "\n  Goodbye.\n\n" >&2

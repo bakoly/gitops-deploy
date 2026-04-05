@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bagitops update — pull latest from the CLI repo itself
 
-CLI_DIR="$HOME/.bagitops/cli"
+CLI_DIR="$BAGITOPS_CLI_DIR/cli"
 
 cmd_update() {
   require_cmd git

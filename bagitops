@@ -7,8 +7,11 @@ LIB_DIR="$SCRIPT_DIR/lib"
 
 source "$LIB_DIR/utils.sh"
 source "$LIB_DIR/ui.sh"
+source "$LIB_DIR/cmd_init.sh"
 source "$LIB_DIR/cmd_pull.sh"
 source "$LIB_DIR/cmd_run.sh"
+source "$LIB_DIR/cmd_setenv.sh"
+source "$LIB_DIR/cmd_clear_data.sh"
 source "$LIB_DIR/cmd_update.sh"
 source "$LIB_DIR/cmd_uninstall.sh"
 
@@ -17,16 +20,22 @@ bagitops_usage() {
 bagitops — GitOps deployment utility
 
 Usage:
-  bagitops pull <git-repo-url> [--ssh-key <path>]
+  bagitops init <project-name> <repo-url> [--ssh-key <path>]
+  bagitops pull
+  bagitops setenv <env-file> [<env-file> ...]
   bagitops run
+  bagitops clear-data <service>
   bagitops update
   bagitops uninstall
 
 Commands:
-  pull       Clone/update remote app repo, assemble image chunks, load into Docker
-  run        Start containers via docker-compose.yml in the pulled repo
-  update     Pull latest bagitops from the CLI repo
-  uninstall  Remove bagitops and all its data
+  init         Set project name, repo URL, and optional SSH key (required before pull)
+  pull         Fetch latest snapshot, assemble image chunks, load into Docker
+  setenv       Copy env file(s) to the location expected by containers (envs/)
+  run          Validate env files, create volume dirs, start containers
+  clear-data   Stop a service and wipe its bind-mount volume data
+  update       Pull latest bagitops from the CLI repo
+  uninstall    Remove bagitops and all its data
 EOF
 }
 
@@ -36,8 +45,11 @@ print_banner
 
 cmd="$1"; shift
 case "$cmd" in
+  init)          cmd_init "$@" ;;
   pull)          cmd_pull "$@" ;;
+  setenv)        cmd_setenv "$@" ;;
   run)           cmd_run ;;
+  clear-data)    cmd_clear_data "$@" ;;
   update)        cmd_update ;;
   uninstall)     cmd_uninstall ;;
   help|--help|-h) bagitops_usage ;;

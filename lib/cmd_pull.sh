@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# bagitops pull <git-repo-url> [--ssh-key <path>]
+# bagitops pull
 
 cmd_pull() {
-  local repo_url="" ssh_key=""
-
-  [[ $# -ge 1 ]] || { bagitops_usage; exit 1; }
-  repo_url="$1"; shift
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --ssh-key) ssh_key="$2"; shift 2 ;;
-      *) die "unknown option: $1" ;;
-    esac
-  done
+  [[ $# -eq 0 ]] || die "'bagitops pull' takes no arguments — set the repo URL with 'bagitops init'"
 
   require_cmd git
   require_cmd docker
+
+  load_config
+
+  local repo_url="${BAGITOPS_REPO_URL:-}"
+  local ssh_key="${BAGITOPS_SSH_KEY:-}"
+
+  [[ -n "$repo_url" ]] || die "no repo URL in config — re-run 'bagitops init <name> <url>'"
 
   local git_ssh_cmd=""
   if [[ -n "$ssh_key" ]]; then
@@ -23,59 +20,81 @@ cmd_pull() {
     git_ssh_cmd="ssh -i $ssh_key -o StrictHostKeyChecking=no -o BatchMode=yes"
   fi
 
-  mkdir -p "$REPO_DIR"
+  local repo_dir="$BAGITOPS_REPO_DIR"
+  local parts_dir="$repo_dir/imageparts"   # git clone lives here
 
-  # --- Sync repo ---
+  mkdir -p "$parts_dir"
+
+  # --- Sync repo into imageparts/ ---
   spinner_start "Syncing repo..."
-  if [[ -d "$REPO_DIR/.git" ]]; then
+  if [[ -d "$parts_dir/.git" ]]; then
     if [[ -n "$git_ssh_cmd" ]]; then
-      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$REPO_DIR" remote set-url origin "$repo_url" &>/dev/null
-      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$REPO_DIR" pull --ff-only &>/dev/null
+      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
+      GIT_SSH_COMMAND="$git_ssh_cmd" git -C "$parts_dir" fetch --depth 1 origin &>/dev/null
     else
-      git -C "$REPO_DIR" remote set-url origin "$repo_url" &>/dev/null
-      git -C "$REPO_DIR" pull --ff-only &>/dev/null
+      git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
+      git -C "$parts_dir" fetch --depth 1 origin &>/dev/null
     fi
+    git -C "$parts_dir" reset --hard FETCH_HEAD &>/dev/null
   else
-    rm -rf "$REPO_DIR"
+    rm -rf "$parts_dir"
     if [[ -n "$git_ssh_cmd" ]]; then
-      GIT_SSH_COMMAND="$git_ssh_cmd" git clone "$repo_url" "$REPO_DIR" &>/dev/null
+      GIT_SSH_COMMAND="$git_ssh_cmd" git clone --depth 1 "$repo_url" "$parts_dir" &>/dev/null
     else
-      git clone "$repo_url" "$REPO_DIR" &>/dev/null
+      git clone --depth 1 "$repo_url" "$parts_dir" &>/dev/null
     fi
   fi
   spinner_stop "Repo synced"
 
-  # --- Find chunks ---
-  local chunks
-  mapfile -t chunks < <(find "$REPO_DIR" -maxdepth 1 -name "image.tar.part.*" | sort)
-  [[ ${#chunks[@]} -gt 0 ]] || die "no image chunks found (image.tar.part.*) in repo root"
+  # --- Discover image sets ---
+  # Group chunk files by archive name (strip trailing .NNN numeric suffix).
+  # e.g. imageparts/cc-org-api.tar.000 → cc-org-api.tar
+  local archives=()
+  mapfile -t archives < <(
+    find "$parts_dir" -maxdepth 1 -type f -name "*.tar.*" \
+      | sed 's/\.[0-9][0-9]*$//' \
+      | sort -u \
+      | xargs -I{} basename {}
+  )
+  [[ ${#archives[@]} -gt 0 ]] || die "no image chunks found in imageparts/"
 
-  # --- Assemble chunks ---
-  local tmp_tar
-  tmp_tar="$(mktemp /tmp/bagitops_image_XXXXXX.tar)"
-  trap 'rm -f "$tmp_tar"' EXIT
+  # --- For each archive: assemble (to repo_dir root) → load → remove ---
+  for archive in "${archives[@]}"; do
+    local image_tar="$repo_dir/$archive"   # direct child of .bagitops-repo/
 
-  local i=0
-  for chunk in "${chunks[@]}"; do
-    (( i++ ))
-    cat "$chunk" >> "$tmp_tar"
-    progress_bar "$i" "${#chunks[@]}" "assembling chunks"
+    local chunks=()
+    mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)
+
+    rm -f "$image_tar"
+    local i=0
+    for chunk in "${chunks[@]}"; do
+      (( i++ ))
+      cat "$chunk" >> "$image_tar"
+      progress_bar "$i" "${#chunks[@]}" "assembling $archive"
+    done
+
+    spinner_start "Loading $archive..."
+    local load_out
+    load_out="$(docker load -i "$image_tar" 2>&1)"
+    spinner_stop "$archive loaded"
+    printf "  ${DIM}%s${RESET}\n" "$load_out" >&2
+
+    rm -f "$image_tar"
   done
 
-  # --- Load image ---
-  spinner_start "Loading image into Docker..."
-  local load_out
-  load_out="$(docker load -i "$tmp_tar" 2>&1)"
-  spinner_stop "Image loaded"
-  printf "  ${DIM}%s${RESET}\n" "$load_out" >&2
+  # --- Promote docker-compose.yml before wiping imageparts/ ---
+  local compose_src="$parts_dir/docker-compose.yml"
+  [[ -f "$compose_src" ]] || die "docker-compose.yml not found in imageparts/ — incomplete repo?"
+  cp "$compose_src" "$repo_dir/docker-compose.yml"
+  spinner_stop "docker-compose.yml ready"
 
-  # --- Persist config ---
-  mkdir -p "$BAGITOPS_DIR"
-  cat > "$CONFIG_FILE" <<CONF
-BAGITOPS_REPO_URL="$repo_url"
-BAGITOPS_SSH_KEY="$ssh_key"
-BAGITOPS_REPO_DIR="$REPO_DIR"
-CONF
+  # --- Validate bind-mount conventions ---
+  check_bind_mount_paths "$repo_dir/docker-compose.yml"
+
+  # --- Wipe all contents of imageparts/ (.git, chunks, everything) ---
+  spinner_start "Clearing imageparts/..."
+  find "$parts_dir" -mindepth 1 -delete
+  spinner_stop "imageparts/ cleared"
 
   printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
 }
