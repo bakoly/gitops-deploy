@@ -83,8 +83,10 @@ cmd_init() {
     [[ -f "$ssh_key_src" ]] || die "ssh key not found: $ssh_key_src"
   fi
 
-  # Create the repo dir so the key can be stored immediately
+  # Create project directories
   mkdir -p "$PWD/bagitops-repo"
+  mkdir -p "$PWD/envs"
+  mkdir -p "$PWD/data"
 
   # Copy or paste the SSH key into the project folder
   local ssh_key=""
@@ -109,6 +111,7 @@ CONF
   printf "\n" >&2
   printf "  ${GREEN}✓${RESET}  Project: ${BOLD}%s${RESET}\n" "$project_name" >&2
   printf "  ${GREEN}✓${RESET}  Repo:    ${DIM}%s${RESET}\n" "$repo_url" >&2
+  printf "  ${GREEN}✓${RESET}  Created: ${DIM}bagitops-repo/  envs/  data/${RESET}\n" >&2
   if [[ -n "$ssh_key" ]]; then
     printf "  ${GREEN}✓${RESET}  SSH key: ${DIM}stored in project folder${RESET}\n" >&2
   else

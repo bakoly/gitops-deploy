@@ -5,7 +5,6 @@ cmd_pull() {
   [[ $# -eq 0 ]] || die "'bagitops pull' takes no arguments — set the repo URL with 'bagitops init'"
 
   require_cmd git
-  require_cmd docker
 
   load_config
 
@@ -86,8 +85,8 @@ cmd_pull() {
   [[ ${#archives[@]} -gt 0 ]] || die "no image chunks found in imageparts/"
   printf "  ${DIM}      found %d archive(s): %s${RESET}\n" "${#archives[@]}" "${archives[*]}" >&2
 
-  # --- For each archive: assemble (to repo_dir root) → load → remove ---
-  printf "  ${DIM}[4/5] assembling and loading images...${RESET}\n" >&2
+  # --- Assemble all tar files (chunks → complete tars in repo_dir/) ---
+  printf "  ${DIM}[4/5] assembling tar files...${RESET}\n" >&2
   for archive in "${archives[@]}"; do
     local image_tar="$repo_dir/$archive"   # direct child of bagitops-repo/
 
@@ -102,30 +101,18 @@ cmd_pull() {
       cat "$chunk" >> "$image_tar"
       progress_bar "$i" "${#chunks[@]}" "assembling $archive"
     done
-
-    spinner_start "Loading $archive into Docker..."
-    local load_out
-    load_out="$(docker load -i "$image_tar" 2>&1)"
-    spinner_stop "$archive loaded"
-    printf "  ${DIM}%s${RESET}\n" "$load_out" >&2
-
-    rm -f "$image_tar"
   done
 
-  # --- Promote docker-compose.yml before wiping imageparts/ ---
+  # --- Promote docker-compose.yml, validate, then wipe imageparts/ ---
   printf "  ${DIM}[5/5] finalising...${RESET}\n" >&2
   local compose_src="$parts_dir/docker-compose.yml"
   [[ -f "$compose_src" ]] || die "docker-compose.yml not found in imageparts/ — incomplete repo?"
   cp "$compose_src" "$repo_dir/docker-compose.yml"
-  spinner_stop "docker-compose.yml ready"
-
-  # --- Validate bind-mount conventions ---
   check_bind_mount_paths "$repo_dir/docker-compose.yml"
 
-  # --- Wipe all contents of imageparts/ (.git, chunks, everything) ---
   spinner_start "Clearing imageparts/..."
   find "$parts_dir" -mindepth 1 -delete
   spinner_stop "imageparts/ cleared"
 
-  printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
+  printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
 }

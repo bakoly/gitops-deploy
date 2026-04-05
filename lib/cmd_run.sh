@@ -99,6 +99,22 @@ cmd_run() {
   printf "\n  ${BOLD}Checking env files...${RESET}\n" >&2
   check_env_files "$compose_file"
 
+  # Load any assembled tar images present in repo_dir/
+  local tars=()
+  mapfile -t tars < <(find "$BAGITOPS_REPO_DIR" -maxdepth 1 -type f -name "*.tar" | sort)
+  if [[ ${#tars[@]} -gt 0 ]]; then
+    printf "\n  ${BOLD}Loading Docker images...${RESET}\n" >&2
+    for image_tar in "${tars[@]}"; do
+      local tname; tname="$(basename "$image_tar")"
+      spinner_start "Loading $tname..."
+      local load_out
+      load_out="$(docker load -i "$image_tar" 2>&1)"
+      spinner_stop "$tname loaded"
+      printf "  ${DIM}%s${RESET}\n" "$load_out" >&2
+      rm -f "$image_tar"
+    done
+  fi
+
   # Create host-side bind-mount directories so Docker doesn't create them as root
   local mounts=()
   mapfile -t mounts < <(compose_bind_mounts "$compose_file")
