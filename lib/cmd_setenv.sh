@@ -13,8 +13,23 @@ cmd_setenv() {
   for src in "$@"; do
     if [[ ! -f "$src" ]]; then
       printf "  ${RESET}✗  not found: %s\n" "$src" >&2
-      any_error=1
-      continue
+      # Offer to create the file interactively (finish input with Ctrl-D)
+      read -r -p "  Create and enter content for '$src' now? Finish with Ctrl-D (y/N): " ans
+      case "$ans" in
+        [Yy]*)
+          printf "  Enter content, finish with Ctrl-D:\n"
+          cat > "$src"
+          if [[ ! -f "$src" ]]; then
+            printf "  ${RESET}✗  failed to create: %s\n" "$src" >&2
+            any_error=1
+            continue
+          fi
+          ;;
+        *)
+          any_error=1
+          continue
+          ;;
+      esac
     fi
     local name
     name="$(basename "$src")"
