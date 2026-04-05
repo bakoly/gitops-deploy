@@ -17,6 +17,19 @@ _read_ssh_key_paste() {
 cmd_init() {
   local project_name="" repo_url="" ssh_key_src=""
 
+  # Refuse to reinit or nest: check current and every parent directory for an existing bagitops anchor
+  local check="$PWD"
+  while [[ "$check" != "/" ]]; do
+    if [[ -f "$check/bagitops.conf" ]]; then
+      if [[ "$check" == "$PWD" ]]; then
+        die "already initialized in this directory — run 'bagitops pull' to fetch the app"
+      else
+        die "already inside a bagitops project rooted at '$check' — nesting is not allowed"
+      fi
+    fi
+    check="$(dirname "$check")"
+  done
+
   # ---------------------------------------------------------------------------
   # Interactive wizard when no arguments are given
   # ---------------------------------------------------------------------------
@@ -70,19 +83,6 @@ cmd_init() {
     [[ -f "$ssh_key_src" ]] || die "ssh key not found: $ssh_key_src"
   fi
 
-  # Refuse to reinit or nest: check current and every parent directory for an existing .bagitops anchor
-  local check="$PWD"
-  while [[ "$check" != "/" ]]; do
-    if [[ -f "$check/bagitops" ]]; then
-      if [[ "$check" == "$PWD" ]]; then
-        die "already initialized in this directory — run 'bagitops pull' to fetch the app"
-      else
-        die "already inside a bagitops project rooted at '$check' — nesting is not allowed"
-      fi
-    fi
-    check="$(dirname "$check")"
-  done
-
   # Create the repo dir so the key can be stored immediately
   mkdir -p "$PWD/bagitops-repo"
 
@@ -100,7 +100,7 @@ cmd_init() {
   fi
 
   # Write the anchor + config into the current directory
-  cat > "$PWD/bagitops" <<CONF
+  cat > "$PWD/bagitops.conf" <<CONF
 BAGITOPS_PROJECT_NAME="$project_name"
 BAGITOPS_REPO_URL="$repo_url"
 BAGITOPS_SSH_KEY="$ssh_key"

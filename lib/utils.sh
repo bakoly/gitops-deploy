@@ -123,7 +123,7 @@ require_cmd() { command -v "$1" &>/dev/null || die "'$1' is required but not fou
 _find_project_root() {
   local dir="${1:-$PWD}"
   while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/bagitops" ]]; then
+    if [[ -f "$dir/bagitops.conf" ]]; then
       echo "$dir"
       return 0
     fi
@@ -138,7 +138,7 @@ load_config() {
     || die "not inside a bagitops project — run 'bagitops init <name> <url>' first"
 
   # shellcheck source=/dev/null
-  source "$root/bagitops"
+  source "$root/bagitops.conf"
 
   BAGITOPS_PROJECT_ROOT="$root"
   BAGITOPS_REPO_DIR="$root/bagitops-repo"
