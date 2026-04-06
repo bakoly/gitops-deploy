@@ -127,14 +127,18 @@ cmd_run() {
     done
   fi
 
-  spinner_start "Recreating containers..."
+  local compose_bin=""
   if docker compose version &>/dev/null 2>&1; then
-    docker compose -f "$compose_file" up -d --force-recreate &>/dev/null
+    compose_bin="docker compose"
   elif command -v docker-compose &>/dev/null; then
-    docker-compose -f "$compose_file" up -d --force-recreate &>/dev/null
+    compose_bin="docker-compose"
   else
-    spinner_fail "no compose tool found"
     die "neither 'docker compose' nor 'docker-compose' found"
   fi
-  spinner_stop "Containers running"
+
+  printf "\n  ${BOLD}Recreating containers...${RESET}\n" >&2
+  $compose_bin -f "$compose_file" up -d --force-recreate 2>&1 | sed 's/^/  /' >&2
+  if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    die "docker compose up --force-recreate failed"
+  fi
 }
