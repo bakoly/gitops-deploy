@@ -69,13 +69,15 @@ cmd_pull() {
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
-      git -C "$parts_dir" fetch --depth 1 origin &>/dev/null
+      git -C "$parts_dir" fetch --depth 1 origin 2>&1 | tail -3 >&2 || \
+      die "git fetch failed — check SSH key and repo URL"
     git -C "$parts_dir" reset --hard FETCH_HEAD &>/dev/null
   else
     printf "  ${DIM}      fresh clone${RESET}\n" >&2
     rm -rf "$parts_dir"
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
-      git clone --depth 1 "$repo_url" "$parts_dir" &>/dev/null
+      git clone --depth 1 "$repo_url" "$parts_dir" 2>&1 | tail -3 >&2 || \
+      die "git clone failed — check SSH key and repo URL"
   fi
   spinner_stop "Repo synced"
 
