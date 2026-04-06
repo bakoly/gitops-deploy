@@ -64,7 +64,7 @@ cmd_pull() {
   # --- Sync repo into imageparts/ ---
   printf "  ${DIM}[2/5] syncing repo...${RESET}\n" >&2
   spinner_start "Syncing repo..."
-  if [[ -d "$parts_dir/.git" ]]; then
+  if [[ $force -eq 0 && -d "$parts_dir/.git" ]]; then
     printf "  ${DIM}      updating existing clone${RESET}\n" >&2
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
@@ -81,13 +81,9 @@ cmd_pull() {
   fi
   spinner_stop "Repo synced"
 
-  # Save the commit SHA now, before imageparts/ is wiped
   local head_sha
   head_sha="$(git -C "$parts_dir" rev-parse HEAD 2>/dev/null)"
-  if [[ -n "$head_sha" ]]; then
-    printf '%s\n' "$head_sha" > "$last_commit_file"
-    printf "  ${DIM}      commit: %.12s${RESET}\n" "$head_sha" >&2
-  fi
+  printf "  ${DIM}      commit: %.12s${RESET}\n" "$head_sha" >&2
 
   # --- Discover image sets ---
   # Group chunk files by archive name (strip trailing .NNN numeric suffix).
@@ -127,6 +123,10 @@ cmd_pull() {
   [[ -f "$compose_src" ]] || die "docker-compose.yml not found in imageparts/ — incomplete repo?"
   cp "$compose_src" "$repo_dir/docker-compose.yml"
   check_bind_mount_paths "$repo_dir/docker-compose.yml"
+
+  if [[ -n "$head_sha" ]]; then
+    printf '%s\n' "$head_sha" > "$last_commit_file"
+  fi
 
   spinner_start "Removing imageparts/..."
   rm -rf "$parts_dir"
