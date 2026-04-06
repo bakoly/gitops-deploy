@@ -137,32 +137,7 @@ cmd_run() {
   fi
 
   printf "\n  ${BOLD}Recreating containers...${RESET}\n\n" >&2
-
-  # Stream compose output line by line.
-  # As soon as we see a "Waiting" line the containers are already running —
-  # that's just healthcheck polling. Kill compose and move on.
-  coproc COMPOSE { $compose_bin -f "$compose_file" up -d --force-recreate 2>&1; }
-  local _compose_pid=$COMPOSE_PID
-  local _killed=0
-
-  while IFS= read -r _line <&"${COMPOSE[0]}"; do
-    printf '%s\n' "$_line"
-    if [[ "$_line" == *" Waiting"* ]]; then
-      kill "$_compose_pid" 2>/dev/null
-      _killed=1
-      break
-    fi
-  done >&2
-
-  local _exit=0
-  wait "$_compose_pid" 2>/dev/null; _exit=$?
-  if [[ $_killed -eq 0 && $_exit -ne 0 ]]; then
-    die "docker compose up --force-recreate failed (exit $_exit)"
-  fi
-
-  # If we cut off docker compose during healthcheck waiting, some dependent
-  # containers were recreated but not yet started. Start them now.
-  if [[ $_killed -eq 1 ]]; then
-    $compose_bin -f "$compose_file" start >/dev/null 2>&1 || true
+  if ! $compose_bin -f "$compose_file" up -d --force-recreate; then
+    die "docker compose up --force-recreate failed"
   fi
 }
