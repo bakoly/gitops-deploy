@@ -159,4 +159,10 @@ cmd_run() {
   if [[ $_killed -eq 0 && $_exit -ne 0 ]]; then
     die "docker compose up --force-recreate failed (exit $_exit)"
   fi
+
+  # If we cut off docker compose during healthcheck waiting, some dependent
+  # containers were recreated but not yet started. Start them now.
+  if [[ $_killed -eq 1 ]]; then
+    $compose_bin -f "$compose_file" start >/dev/null 2>&1 || true
+  fi
 }
