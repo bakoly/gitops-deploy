@@ -122,7 +122,13 @@ cmd_run() {
     printf "\n  ${BOLD}Preparing volume directories...${RESET}\n" >&2
     for rel in "${mounts[@]}"; do
       local abs="$BAGITOPS_REPO_DIR/$rel"
-      mkdir -p "$abs"
+      # If the path ends with a file extension it's a file mount — only create
+      # the parent directory so Docker doesn't turn the filename into a dir.
+      if [[ "$rel" =~ \.[a-zA-Z0-9]+$ ]]; then
+        mkdir -p "$(dirname "$abs")"
+      else
+        mkdir -p "$abs"
+      fi
       printf "  ${GREEN}✓${RESET}  %s\n" "$rel" >&2
     done
   fi
