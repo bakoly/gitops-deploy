@@ -108,13 +108,22 @@ cmd_pull() {
     mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)
     printf "  ${DIM}      %s: %d chunk(s)${RESET}\n" "$archive" "${#chunks[@]}" >&2
 
+    [[ ${#chunks[@]} -gt 0 ]] || die "no chunks found for archive: $archive"
+
     rm -f "$image_tar"
     local i=0
     for chunk in "${chunks[@]}"; do
       i=$(( i + 1 ))
-      cat "$chunk" >> "$image_tar"
+      if ! cat "$chunk" >> "$image_tar"; then
+        die "failed to assemble chunk: $chunk into $image_tar"
+      fi
       progress_bar "$i" "${#chunks[@]}" "assembling $archive"
     done
+
+    # Validate assembled tar file
+    if ! tar -tzf "$image_tar" &>/dev/null; then
+      die "assembled tar file is corrupted: $image_tar"
+    fi
   done
 
   # --- Promote docker-compose.yml, validate, then wipe imageparts/ ---

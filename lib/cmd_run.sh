@@ -108,7 +108,11 @@ cmd_run() {
       local tname; tname="$(basename "$image_tar")"
       spinner_start "Loading $tname..."
       local load_out
-      load_out="$(docker load -i "$image_tar" 2>&1)"
+      if ! load_out="$(docker load -i "$image_tar" 2>&1)"; then
+        spinner_stop "FAILED"
+        printf "  ${RESET}✗  %s\n" "$load_out" >&2
+        die "failed to load Docker image: $tname"
+      fi
       spinner_stop "$tname loaded"
       printf "  ${DIM}%s${RESET}\n" "$load_out" >&2
       rm -f "$image_tar"
