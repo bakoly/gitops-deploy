@@ -55,7 +55,7 @@ cmd_pull() {
         printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
         return 0
       fi
-      printf "  ${DIM}      up to date but images missing — re-assembling${RESET}\n" >&2
+      printf "  ${DIM}      re-syncing to verify...${RESET}\n" >&2
     fi
   fi
 
@@ -96,35 +96,42 @@ cmd_pull() {
       | sort -u \
       | xargs -I{} basename {}
   )
-  [[ ${#archives[@]} -gt 0 ]] || die "no image chunks found in imageparts/"
-  printf "  ${DIM}      found %d archive(s): %s${RESET}\n" "${#archives[@]}" "${archives[*]}" >&2
+  if [[ ${#archives[@]} -eq 0 ]]; then
+    printf "  ${DIM}      no image chunks — using official images${RESET}\n" >&2
+  else
+    printf "  ${DIM}      found %d archive(s): %s${RESET}\n" "${#archives[@]}" "${archives[*]}" >&2
+  fi
 
   # --- Assemble all tar files (chunks → complete tars in repo_dir/) ---
-  printf "  ${DIM}[4/5] assembling tar files...${RESET}\n" >&2
-  for archive in "${archives[@]}"; do
-    local image_tar="$repo_dir/$archive"   # direct child of bagitops-repo/
+  if [[ ${#archives[@]} -gt 0 ]]; then
+    printf "  ${DIM}[4/5] assembling tar files...${RESET}\n" >&2
+    for archive in "${archives[@]}"; do
+      local image_tar="$repo_dir/$archive"   # direct child of bagitops-repo/
 
-    local chunks=()
-    mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)
-    printf "  ${DIM}      %s: %d chunk(s)${RESET}\n" "$archive" "${#chunks[@]}" >&2
+      local chunks=()
+      mapfile -t chunks < <(find "$parts_dir" -maxdepth 1 -name "${archive}.*" -type f | sort)
+      printf "  ${DIM}      %s: %d chunk(s)${RESET}\n" "$archive" "${#chunks[@]}" >&2
 
-    [[ ${#chunks[@]} -gt 0 ]] || die "no chunks found for archive: $archive"
+      [[ ${#chunks[@]} -gt 0 ]] || die "no chunks found for archive: $archive"
 
-    rm -f "$image_tar"
-    local i=0
-    for chunk in "${chunks[@]}"; do
-      i=$(( i + 1 ))
-      if ! cat "$chunk" >> "$image_tar"; then
-        die "failed to assemble chunk: $chunk into $image_tar"
+      rm -f "$image_tar"
+      local i=0
+      for chunk in "${chunks[@]}"; do
+        i=$(( i + 1 ))
+        if ! cat "$chunk" >> "$image_tar"; then
+          die "failed to assemble chunk: $chunk into $image_tar"
+        fi
+        progress_bar "$i" "${#chunks[@]}" "assembling $archive"
+      done
+
+      # Validate assembled tar file
+      if ! tar -tzf "$image_tar" &>/dev/null; then
+        die "assembled tar file is corrupted: $image_tar"
       fi
-      progress_bar "$i" "${#chunks[@]}" "assembling $archive"
     done
-
-    # Validate assembled tar file
-    if ! tar -tzf "$image_tar" &>/dev/null; then
-      die "assembled tar file is corrupted: $image_tar"
-    fi
-  done
+  else
+    printf "  ${DIM}[4/5] skipping tar assembly (official images)${RESET}\n" >&2
+  fi
 
   # --- Promote docker-compose.yml, validate, then wipe imageparts/ ---
   printf "  ${DIM}[5/5] finalising...${RESET}\n" >&2
@@ -141,5 +148,9 @@ cmd_pull() {
   rm -rf "$parts_dir"
   spinner_stop "imageparts/ removed"
 
-  printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
+  if [[ ${#archives[@]} -gt 0 ]]; then
+    printf "\n  Run ${BOLD}bagitops run${RESET} to load images and start containers.\n\n" >&2
+  else
+    printf "\n  Run ${BOLD}bagitops run${RESET} to start containers.\n\n" >&2
+  fi
 }
