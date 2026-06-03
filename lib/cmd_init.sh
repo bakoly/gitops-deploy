@@ -15,7 +15,7 @@ _read_ssh_key_paste() {
 }
 
 cmd_init() {
-  local project_name="" repo_url="" ssh_key_src=""
+  local project_name="" repo_url="" branch_name="" ssh_key_src=""
 
   # Refuse to reinit or nest: check current and every parent directory for an existing bagitops anchor
   local check="$PWD"
@@ -44,6 +44,23 @@ cmd_init() {
     read -r repo_url
     [[ -n "$repo_url" ]] || die "repo URL cannot be empty"
 
+    printf "  Branch:\n" >&2
+    printf "    1) staging\n" >&2
+    printf "    2) production\n" >&2
+    printf "    3) custom\n" >&2
+    printf "  Choice [1-3]: " >&2
+    local branch_choice; read -r branch_choice
+    case "$branch_choice" in
+      1) branch_name="staging" ;;
+      2) branch_name="production" ;;
+      3)
+        printf "  Branch name:  " >&2
+        read -r branch_name
+        [[ -n "$branch_name" ]] || die "branch name cannot be empty"
+        ;;
+      *) die "invalid choice: $branch_choice" ;;
+    esac
+
     printf "  Use an SSH key? [y/N] " >&2
     local yn; read -r yn
     if [[ "$yn" =~ ^[Yy] ]]; then
@@ -56,12 +73,16 @@ cmd_init() {
   # Non-interactive: bagitops init <name> <url> [--ssh-key [<path>]]
   # ---------------------------------------------------------------------------
   else
-    [[ $# -ge 2 ]] || { printf "Usage: bagitops init <project-name> <repo-url> [--ssh-key [<path>]]\n" >&2; exit 1; }
+    [[ $# -ge 2 ]] || { printf "Usage: bagitops init <project-name> <repo-url> [--branch <branch>] [--ssh-key [<path>]]\n" >&2; exit 1; }
     project_name="$1"; shift
     repo_url="$1"; shift
 
     while [[ $# -gt 0 ]]; do
       case "$1" in
+        --branch)
+          [[ $# -gt 1 ]] || die "--branch requires a value"
+          branch_name="$2"; shift 2
+          ;;
         --ssh-key)
           if [[ $# -gt 1 && "$2" != --* ]]; then
             ssh_key_src="$2"; shift 2
@@ -72,6 +93,7 @@ cmd_init() {
         *) die "unknown option: $1" ;;
       esac
     done
+    [[ -n "$branch_name" ]] || die "--branch <branch> is required in non-interactive mode"
   fi
 
   # Validate URL
@@ -105,12 +127,14 @@ cmd_init() {
   cat > "$PWD/bagitops.conf" <<CONF
 BAGITOPS_PROJECT_NAME="$project_name"
 BAGITOPS_REPO_URL="$repo_url"
+BAGITOPS_BRANCH="$branch_name"
 BAGITOPS_SSH_KEY="$ssh_key"
 CONF
 
   printf "\n" >&2
   printf "  ${GREEN}✓${RESET}  Project: ${BOLD}%s${RESET}\n" "$project_name" >&2
   printf "  ${GREEN}✓${RESET}  Repo:    ${DIM}%s${RESET}\n" "$repo_url" >&2
+  printf "  ${GREEN}✓${RESET}  Branch:  ${DIM}%s${RESET}\n" "$branch_name" >&2
   printf "  ${GREEN}✓${RESET}  Created: ${DIM}bagitops-repo/  envs/  data/${RESET}\n" >&2
   if [[ -n "$ssh_key" ]]; then
     printf "  ${GREEN}✓${RESET}  SSH key: ${DIM}stored in project folder${RESET}\n" >&2

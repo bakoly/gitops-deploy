@@ -15,9 +15,11 @@ cmd_pull() {
   load_config
 
   local repo_url="${BAGITOPS_REPO_URL:-}"
+  local branch="${BAGITOPS_BRANCH:-}"
   local ssh_key="${BAGITOPS_SSH_KEY:-}"
 
   [[ -n "$repo_url" ]] || die "no repo URL in config — re-run 'bagitops init <name> <url>'"
+  [[ -n "$branch" ]] || die "no branch in config — re-run 'bagitops init'"
 
   # ConnectTimeout only limits SSH handshake, not ongoing data transfers
   local git_ssh_cmd=""
@@ -36,7 +38,7 @@ cmd_pull() {
     printf "  ${DIM}[1/5] skipping HEAD check (--force)${RESET}\n" >&2
   else
     printf "  ${DIM}[1/5] checking remote HEAD...${RESET}\n" >&2
-    remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 git ls-remote "$repo_url" HEAD 2>/dev/null | cut -f1)"
+    remote_sha="$(GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 git ls-remote "$repo_url" "refs/heads/$branch" 2>/dev/null | cut -f1)"
     [[ -f "$last_commit_file" ]] && cached_sha="$(cat "$last_commit_file")"
 
     if [[ -n "$remote_sha" ]]; then
@@ -69,14 +71,14 @@ cmd_pull() {
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
       git -C "$parts_dir" remote set-url origin "$repo_url" &>/dev/null
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
-      git -C "$parts_dir" fetch --depth 1 origin 2>&1 | tail -3 >&2 || \
+      git -C "$parts_dir" fetch --depth 1 origin "$branch" 2>&1 | tail -3 >&2 || \
       die "git fetch failed — check SSH key and repo URL"
     git -C "$parts_dir" reset --hard FETCH_HEAD &>/dev/null
   else
     printf "  ${DIM}      fresh clone${RESET}\n" >&2
     rm -rf "$parts_dir"
     GIT_SSH_COMMAND="$git_ssh_cmd" GIT_TERMINAL_PROMPT=0 \
-      git clone --depth 1 "$repo_url" "$parts_dir" 2>&1 | tail -3 >&2 || \
+      git clone --depth 1 --branch "$branch" "$repo_url" "$parts_dir" 2>&1 | tail -3 >&2 || \
       die "git clone failed — check SSH key and repo URL"
   fi
   spinner_stop "Repo synced"
