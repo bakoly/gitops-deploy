@@ -14,6 +14,8 @@ source "$LIB_DIR/cmd_setenv.sh"
 source "$LIB_DIR/cmd_clear_data.sh"
 source "$LIB_DIR/cmd_update.sh"
 source "$LIB_DIR/cmd_uninstall.sh"
+source "$LIB_DIR/cmd_make_router.sh"
+source "$LIB_DIR/cmd_use_router.sh"
 
 bagitops_usage() {
   cat <<EOF
@@ -27,15 +29,23 @@ Usage:
   bagitops clear-data <service>
   bagitops update
   bagitops uninstall
+  bagitops make-router
+  bagitops cancel-make-router
+  bagitops use-router <router-ip>
+  bagitops cancel-use-router
 
 Commands:
-  init         Set project name, repo URL, and optional SSH key (required before pull)
-  pull         Fetch latest snapshot, assemble image chunks, load into Docker
-  setenv       Copy env file(s) to the location expected by containers (envs/)
-  run          Validate env files, create volume dirs, start containers
-  clear-data   Stop a service and wipe its bind-mount volume data
-  update       Pull latest bagitops from the CLI repo
-  uninstall    Remove bagitops and all its data
+  init                Set project name, repo URL, and optional SSH key (required before pull)
+  pull                Fetch latest snapshot, assemble image chunks, load into Docker
+  setenv              Copy env file(s) to the location expected by containers (envs/)
+  run                 Validate env files, create volume dirs, start containers
+  clear-data          Stop a service and wipe its bind-mount volume data
+  update              Pull latest bagitops from the CLI repo
+  uninstall           Remove bagitops and all its data
+  make-router         Turn this machine into a NAT gateway for other VPC machines (requires sudo)
+  cancel-make-router  Remove NAT gateway configuration from this machine (requires sudo)
+  use-router          Route all internet traffic through a NAT gateway machine (requires sudo)
+  cancel-use-router   Restore original default route (requires sudo)
 EOF
 }
 
@@ -50,8 +60,12 @@ case "$cmd" in
   setenv)        cmd_setenv "$@" ;;
   run)           cmd_run ;;
   clear-data)    cmd_clear_data "$@" ;;
-  update)        cmd_update ;;
-  uninstall)     cmd_uninstall ;;
-  help|--help|-h) bagitops_usage ;;
+  update)               cmd_update ;;
+  uninstall)            cmd_uninstall ;;
+  make-router)          cmd_make_router ;;
+  cancel-make-router)   cmd_cancel_make_router ;;
+  use-router)           cmd_use_router "$@" ;;
+  cancel-use-router)    cmd_cancel_use_router ;;
+  help|--help|-h)       bagitops_usage ;;
   *) die "unknown command: $cmd (try 'bagitops help')" ;;
 esac
